@@ -36,8 +36,8 @@ end
 
 opt_parser.parse!
 
-price = options.price
-bedrooms = options.bedrooms
+max_price = options.price
+min_bedrooms = options.bedrooms
 if !options.query.empty?
   query = options.query
 else
@@ -73,7 +73,7 @@ print <<-header
 
       <body>
 
-    <div>Price: #{price}, Bedrooms: #{bedrooms}, Query: #{query}</div>
+    <div>Price: #{max_price}, Bedrooms: #{min_bedrooms}, Query: #{query}</div>
     <table id="myTable" class="tablesorter">
     <thead>
     <tr>
@@ -83,6 +83,7 @@ print <<-header
         <th>Price</th>
         <th>Bedrooms</th>
         <th>Footage</th>
+        <th>Dogs</th>
         <th>Distance</th>
         <th>Location</th>
         <th>Image</th>
@@ -96,9 +97,8 @@ post_ids = {}
 i = 1
 query.each do |q|
   [ 0, 1, 2, 3, 4, 5 ].each do |skip|
-    url = "http://sfbay.craigslist.org/search/sfc/apa?s=#{skip}00&query=#{q}&max_price=#{price}&bedrooms=#{bedrooms}&pets_dog=1&hasPic=1&availabilityMode=0&searchNearby=2"
+    url = "http://sfbay.craigslist.org/search/apa?postal=94105&search_distance=10&s=#{skip}00&query=#{q}&min_price=2000&max_price=#{max_price}&bedrooms=#{min_bedrooms}&hasPic=1&availabilityMode=0&searchNearby=1"
     doc = Nokogiri::HTML(open(url))
-
 
     ####
     # Search for nodes by css
@@ -138,24 +138,51 @@ query.each do |q|
 
       next if footage < options.footage
 
-      post = Nokogiri::HTML(open(url))
+      dogs = ''
 
-      description = post.css('#postingbody')[0]
-      if description
-        description = description.text.gsub(/QR Code Link to This Post/, "")
-      end
+      begin
+        post = Nokogiri::HTML(open(url))
 
-      map = post.css('#map')[0]
-      if map 
-        lat = map['data-latitude'].to_f
-        lon = map['data-longitude'].to_f
-      else
+        if /dogs are OK - wooof/i.match(post)
+          dogs = 'OK'
+        end
+
+        m = /under\s+(\d+)lbs/.match(post)
+
+        if m
+          dogs += ' ' + m[0]   
+        end
+
+        if /breeds/.match(post)
+          dogs += ' breed restrictions'
+        end
+
+        if /no dogs/i.match(post)
+          dogs = 'NO'
+        end
+
+        description = post.css('#postingbody')[0]
+        if description
+          description = description.text.gsub(/QR Code Link to This Post/, "")
+        end
+
+        map = post.css('#map')[0]
+        if map 
+          lat = map['data-latitude'].to_f
+          lon = map['data-longitude'].to_f
+        else
+          lat = 0
+          lon = 0
+        end
+
+        dist = Geocoder::Calculations.distance_between([ from_lat, from_lon ], [ lat, lon ] )
+        next if dist > 10 and lat != 0 and lon != 0
+      rescue => e
         lat = 0
         lon = 0
+        dist = 1000
+        description = e.message
       end
-
-      dist = Geocoder::Calculations.distance_between([ from_lat, from_lon ], [ lat, lon ] )
-      next if dist > 15 and lat != 0 and lon != 0
 
       printf('<tr>
             <td>%d</td>
@@ -164,12 +191,13 @@ query.each do |q|
             <td>%s</td>
             <td>%s</td>
             <td>%s</td>
+            <td>%s</td>
             <td>%.2f</td>
             <td>%s</td>
             <td><img src="http://images.craigslist.org/%s_300x300.jpg"></td>
             <td><img src="http://maps.googleapis.com/maps/api/staticmap?center=%f,%f&zoom=11&size=300x300&sensor=false&markers=color:blue%%7Clabel:X%%7C%f,%f"></td>
           </tr>
-         ', i, date, url, title, description, price, bedrooms, footage, dist, loc, img, lat, lon, lat, lon)
+         ', i, date, url, title, description, price, bedrooms, footage, dogs, dist, loc, img, lat, lon, lat, lon)
       i = i + 1
     end
   end

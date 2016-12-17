@@ -5,6 +5,9 @@ require 'geocoder'
 require 'optparse'
 require 'ostruct'
 
+#base_url = 'http://washingtondc.craigslist.org'
+base_url = 'http://newyork.craigslist.org'
+
 options = OpenStruct.new
 options.query = [ ]
 options.footage = 0
@@ -92,7 +95,8 @@ i = 1
 postNumber = 0
 query.each do |q|
   [ 0, 1, 2, 3, 4, 5 ].each do |skip|
-    url = "http://newyork.craigslist.org/search/cto?s=#{skip}00&query=#{q}&hasPic=1&max_auto_miles=#{max_odo}&max_price=#{max_price}&nearbyArea=168&nearbyArea=170&nearbyArea=249&nearbyArea=250&nearbyArea=349&nearbyArea=561&postal=11105&searchNearby=2&search_distance=100&auto_bodytype=12"
+    url = "#{base_url}/search/cta?s=#{skip}00&query=#{q}&hasPic=1&max_auto_miles=#{max_odo}&max_price=#{max_price}&nearbyArea=168&nearbyArea=170&nearbyArea=249&nearbyArea=250&nearbyArea=349&nearbyArea=561&postal=11105&searchNearby=2&search_distance=100&auto_bodytype=12&auto_bodytype=9"
+    #url = "#{base_url}/search/cta?s=#{skip}00&query=#{q}&hasPic=1&max_auto_miles=#{max_odo}&max_price=#{max_price}&nearbyArea=460&nearbyArea=34&nearbyArea=328&nearbyArea=633&nearbyArea=457&nearbyArea=556&search_distance=50&postal=20852&auto_bodytype=12&auto_bodytype=9"
     printf "<!-- url: %s, postNumber: %d --> \n", url, postNumber
     doc = Nokogiri::HTML(open(url))
 
@@ -111,7 +115,7 @@ query.each do |q|
       if (link['href'] =~ /\/\//)
         url = 'http:' + link['href']
       else
-        url = 'http://newyork.craigslist.org' + link['href']
+        url = base_url + link['href']
       end
 
       if post_ids[img]
@@ -137,39 +141,49 @@ query.each do |q|
 #      dist = Geocoder::Calculations.distance_between([ from_lat, from_lon ], [ lat, lon ] )
 #      next if dist > 15 and lat != 0 and lon != 0
 
-      post = Nokogiri::HTML(open(url))
+      begin
+        post = Nokogiri::HTML(open(url))
 
-      map = post.css('#map')[0]
-      if map 
-        lat = map['data-latitude'].to_f
-        lon = map['data-longitude'].to_f
-      else
+        map = post.css('#map')[0]
+        if map 
+          lat = map['data-latitude'].to_f
+          lon = map['data-longitude'].to_f
+        else
+          lat = 0
+          lon = 0
+        end
+
+        mileage = 0
+        attrs = ''
+        for span in post.css('p.attrgroup span') do 
+           if span.text =~ /odometer:\s+(\d+)/
+             mileage = $1.to_i
+           end
+           attrs += ' ' + span.text
+        end
+
+        if mileage < 1000
+          mileage *= 1000
+        end
+    
+        if mileage > max_odo
+          printf "<!-- skipped: mileage: %s-->\n", url
+          next
+        end
+
+        description = post.css('#postingbody')[0]
+        if description
+          description = q + "<br/>" + description.text.gsub(/QR Code Link to This Post/, "")
+        end
+      rescue => e
         lat = 0
         lon = 0
+
+        mileage = 0
+        attrs = ''
+        description = e.message
       end
 
-      mileage = 0
-      attrs = ''
-      for span in post.css('p.attrgroup span') do 
-         if span.text =~ /odometer:\s+(\d+)/
-           mileage = $1.to_i
-         end
-         attrs += ' ' + span.text
-      end
-
-      if mileage < 1000
-        mileage *= 1000
-      end
-
-      if mileage > max_odo
-        printf "<!-- skipped: mileage: %s-->\n", url
-        next
-      end
-
-      description = post.css('#postingbody')[0]
-      if description
-        description = q + "<br/>" + description.text.gsub(/QR Code Link to This Post/, "")
-      end
 
       if exclude_models_regex.match(description)
         printf "<!-- skipped: exclude regex match: %s-->\n", url
