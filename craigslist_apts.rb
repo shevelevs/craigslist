@@ -147,7 +147,7 @@ query.each do |q|
           dogs = 'OK'
         end
 
-        m = /under\s+(\d+)lbs/.match(post)
+        m = /under\s+(\d+)\s*lbs|less\s+than\s+(\d+)\s*lbs/.match(post)
 
         if m
           dogs += ' ' + m[0]   
@@ -157,7 +157,7 @@ query.each do |q|
           dogs += ' breed restrictions'
         end
 
-        if /no dogs/i.match(post)
+        if /no dogs/i.match(post) or /no pets/i.match(post)
           dogs = 'NO'
         end
 
