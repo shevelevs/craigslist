@@ -28,6 +28,9 @@ opt_parser = OptionParser.new do |opt|
   opt.on("-l", "--location LOCATION", "location to include") do |b|
     options.location = b
   end
+  opt.on("-e", "--exclude-locations LOCATIONS", "location to exclude") do |b|
+    options.exclude_locations = b
+  end
 
   opt.on("-h","--help","help") do
     puts opt_parser
@@ -97,7 +100,7 @@ post_ids = {}
 i = 1
 query.each do |q|
   [ 0, 1, 2, 3, 4, 5 ].each do |skip|
-    url = "http://sfbay.craigslist.org/search/apa?postal=94105&search_distance=10&s=#{skip}00&query=#{q}&min_price=2000&max_price=#{max_price}&bedrooms=#{min_bedrooms}&hasPic=1&availabilityMode=0&searchNearby=1"
+    url = "http://sfbay.craigslist.org/search/apa?postal=94105&search_distance=10&s=#{skip}00&query=#{q}&min_price=2200&max_price=#{max_price}&bedrooms=#{min_bedrooms}&hasPic=1&availabilityMode=0&searchNearby=1"
     doc = Nokogiri::HTML(open(url))
 
     ####
@@ -112,9 +115,13 @@ query.each do |q|
         img = img.split(':')[1]
       end
 
-      next if options.location and !loc.downcase.include? options.location
+      loc = loc.downcase.gsub(/\(|\)/, "")
+      next if options.location and !loc.include? options.location
+      next if options.exclude_locations and options.exclude_locations.downcase.include? loc
 
       title = link.text
+      next if /in.law/i.match(title)
+
       url = 'http://sfbay.craigslist.org' + link['href']
 
       date = p.css('time.result-date')[0]['datetime']
@@ -157,14 +164,18 @@ query.each do |q|
           dogs += ' breed restrictions'
         end
 
-        if /no dogs/i.match(post) or /no pets/i.match(post)
+        if /no dogs?/i.match(post) or /no pets?/i.match(post)
           dogs = 'NO'
         end
+
+        next if dogs == 'NO'
 
         description = post.css('#postingbody')[0]
         if description
           description = description.text.gsub(/QR Code Link to This Post/, "")
         end
+      
+        next if /in.law/i.match(description)
 
         map = post.css('#map')[0]
         if map 
