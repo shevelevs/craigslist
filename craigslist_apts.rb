@@ -115,9 +115,11 @@ query.each do |q|
         img = img.split(':')[1]
       end
 
-      loc = loc.downcase.gsub(/\(|\)/, "")
-      next if options.location and !loc.include? options.location
-      next if options.exclude_locations and options.exclude_locations.downcase.include? loc
+      loc = loc.downcase.gsub(/\(|\)/, "").strip!
+      if loc
+        next if options.location and !loc.include? options.location
+        next if options.exclude_locations and options.exclude_locations.downcase.include? loc
+      end
 
       title = link.text
       next if /in.law/i.match(title)
