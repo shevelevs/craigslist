@@ -8,6 +8,7 @@ require 'ostruct'
 options = OpenStruct.new
 options.query = [ ]
 options.footage = 0
+options.date = '2017-01-01 00:00'
 
 opt_parser = OptionParser.new do |opt|
   opt.banner = "Usage: craigslist_search [OPTIONS]"
@@ -30,6 +31,9 @@ opt_parser = OptionParser.new do |opt|
   end
   opt.on("-e", "--exclude-locations LOCATIONS", "location to exclude") do |b|
     options.exclude_locations = b
+  end
+  opt.on("-d", "--date DATE", "only posts after DATE") do |b|
+    options.date = b
   end
 
   opt.on("-h","--help","help") do
@@ -100,7 +104,7 @@ post_ids = {}
 i = 1
 query.each do |q|
   [ 0, 1, 2, 3, 4, 5 ].each do |skip|
-    url = "http://sfbay.craigslist.org/search/apa?postal=94105&search_distance=10&s=#{skip}00&query=#{q}&min_price=2200&max_price=#{max_price}&bedrooms=#{min_bedrooms}&hasPic=1&availabilityMode=0&searchNearby=1"
+    url = "https://sfbay.craigslist.org/search/apa?postal=94105&search_distance=10&s=#{skip}00&query=#{q}&min_price=2200&max_price=#{max_price}&bedrooms=#{min_bedrooms}&hasPic=1&availabilityMode=0&searchNearby=1"
     doc = Nokogiri::HTML(open(url))
 
     ####
@@ -124,9 +128,11 @@ query.each do |q|
       title = link.text
       next if /in.law/i.match(title)
 
-      url = 'http://sfbay.craigslist.org' + link['href']
+      url = 'https://sfbay.craigslist.org' + link['href']
 
       date = p.css('time.result-date')[0]['datetime']
+      next if (date <=> options.date) < 0
+
       price = p.css('span.result-price')[0].text
       if price =~ /\$/
         price = price.gsub(/\$/, '')
@@ -207,7 +213,7 @@ query.each do |q|
             <td>%s</td>
             <td>%.2f</td>
             <td>%s</td>
-            <td><img src="http://images.craigslist.org/%s_300x300.jpg"></td>
+            <td><img src="https://images.craigslist.org/%s_300x300.jpg"></td>
             <td><img src="http://maps.googleapis.com/maps/api/staticmap?center=%f,%f&zoom=11&size=300x300&sensor=false&markers=color:blue%%7Clabel:X%%7C%f,%f"></td>
           </tr>
          ', i, date, url, title, description, price, bedrooms, footage, dogs, dist, loc, img, lat, lon, lat, lon)
